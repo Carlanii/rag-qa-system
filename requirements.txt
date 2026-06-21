@@ -29,3 +29,7 @@ tiktoken>=0.7.0
 # 测试
 pytest>=8.0.0
 httpx>=0.27.0
+
+# 文本分割（langchain v1.3+ 独立包）
+langchain_text_splitters>=0.0.0
+python-multipart>=0.0.0

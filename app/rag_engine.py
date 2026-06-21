@@ -2,13 +2,13 @@
 import os
 from typing import List, Optional
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 from app.config import settings
 
 
@@ -22,11 +22,15 @@ def get_llm():
     elif p == "qwen":
         from langchain_openai import ChatOpenAI as QW
         return QW(model=settings.QWEN_MODEL, temperature=0.3, openai_api_key=settings.QWEN_API_KEY, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
-    raise ValueError(f"unsupported provider: {p}")
+    raise ValueError("unsupported: " + p)
 
 
 def get_embeddings():
     return OpenAIEmbeddings(model=settings.EMBEDDING_MODEL, openai_api_key=settings.OPENAI_API_KEY)
+
+
+def format_docs(docs):
+    return "\n\n".join(d.page_content for d in docs)
 
 
 class RAGEngine:
@@ -35,6 +39,7 @@ class RAGEngine:
         self.embeddings = get_embeddings()
         self.llm = get_llm()
         self.vector_store = None
+        self.chain = None
         os.makedirs(self.persist_dir, exist_ok=True)
 
     def build_knowledge_base(self, file_paths):
@@ -42,12 +47,24 @@ class RAGEngine:
         for p in file_paths:
             docs.extend(self._load(p))
         if not docs:
-            raise ValueError("no documents loaded")
+            raise ValueError("no docs loaded")
         splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
         chunks = splitter.split_documents(docs)
-        self.vector_store = Chroma.from_documents(documents=chunks, embedding=self.embeddings, persist_directory=self.persist_dir)
+        self.vector_store = Chroma.from_documents(chunks, self.embeddings, persist_directory=self.persist_dir)
         self.vector_store.persist()
+        self._build_chain()
         return len(chunks)
+
+    def _build_chain(self):
+        retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "基于上下文回答问题。找不到就说不知道。\n上下文：{context}"),
+            ("human", "{question}"),
+        ])
+        self.chain = (
+            {"context": retriever | format_docs, "question": RunnablePassthrough()}
+            | prompt | self.llm | StrOutputParser()
+        )
 
     def _load(self, path):
         if not os.path.exists(path):
@@ -62,18 +79,16 @@ class RAGEngine:
     def query(self, question, k=3):
         if not self.vector_store:
             self.vector_store = Chroma(persist_directory=self.persist_dir, embedding_function=self.embeddings)
+            self._build_chain()
+        answer = self.chain.invoke(question)
         retriever = self.vector_store.as_retriever(search_kwargs={"k": k})
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "你是智能文档问答助手，基于上下文回答问题。找不到就说不知道。\n上下文：{context}"),
-            ("human", "{input}"),
-        ])
-        chain = create_retrieval_chain(retriever, create_stuff_documents_chain(self.llm, prompt))
-        r = chain.invoke({"input": question})
-        sources = list(set(d.metadata.get("source", "") for d in r.get("context", []) if d.metadata.get("source")))
-        return {"question": question, "answer": r["answer"], "source_documents": sources}
+        docs = retriever.invoke(question)
+        sources = list(set(d.metadata.get("source", "") for d in docs if d.metadata.get("source")))
+        return {"question": question, "answer": answer, "source_documents": sources}
 
     def clear(self):
         import shutil
         if os.path.exists(self.persist_dir):
             shutil.rmtree(self.persist_dir)
         self.vector_store = None
+        self.chain = None
