@@ -48,5 +48,8 @@ async def query(req: QueryRequest):
 
 @app.post("/clear")
 async def clear():
-    engine.clear()
-    return {"status": "ok", "message": "知识库已清空"}
+    try:
+        engine.clear()
+        return {"status": "ok", "message": "知识库已清空"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

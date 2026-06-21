@@ -10,6 +10,7 @@ from langchain_core.documents import Document
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from app.config import settings
+from app.embeddings import LocalEmbeddings
 
 
 def get_llm():
@@ -26,7 +27,12 @@ def get_llm():
 
 
 def get_embeddings():
-    return OpenAIEmbeddings(model=settings.EMBEDDING_MODEL, openai_api_key=settings.OPENAI_API_KEY)
+    if settings.LLM_PROVIDER == "deepseek":
+        return LocalEmbeddings()
+    return OpenAIEmbeddings(
+        model=settings.EMBEDDING_MODEL,
+        openai_api_key=settings.OPENAI_API_KEY,
+    )
 
 
 def format_docs(docs):
@@ -89,6 +95,6 @@ class RAGEngine:
     def clear(self):
         import shutil
         if os.path.exists(self.persist_dir):
-            shutil.rmtree(self.persist_dir)
+            shutil.rmtree(self.persist_dir, ignore_errors=True)
         self.vector_store = None
         self.chain = None
