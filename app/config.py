@@ -4,21 +4,22 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+from pathlib import Path
+load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 
 class Settings:
     """应用配置"""
 
     # LLM 提供商: openai / deepseek / qwen
-    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER") or "openai"
 
     # OpenAI
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY") or ""
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 
     # DeepSeek
-    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
+    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY") or ""
     DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
     # Qwen (阿里通义千问)

@@ -1,4 +1,7 @@
 """FastAPI 后端入口"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import FastAPI, UploadFile, File
 from app.rag_engine import RAGEngine
 from app.models import UploadResponse, QueryRequest, QueryResponse
