@@ -53,3 +53,15 @@ async def clear():
         return {"status": "ok", "message": "知识库已清空"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+if __name__ == "__main__":
+    """直接运行 python main.py 时启动 uvicorn 服务器"""
+    import uvicorn
+    from app.config import settings
+    print("正在启动 RAG 智能文档问答系统...")
+    uvicorn.run(
+        "app.main:app",
+        host=settings.FASTAPI_HOST,
+        port=settings.FASTAPI_PORT,
+        reload=False,
+        log_level="info",
+    )
